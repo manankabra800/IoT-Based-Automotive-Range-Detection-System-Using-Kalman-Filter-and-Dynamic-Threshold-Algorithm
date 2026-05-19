@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT Automotive Range Detection — Live Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;900&display=swap');
+
+  :root {
+    --bg:        #040810;
+    --panel:     #080f1e;
+    --border:    #0d2040;
+    --safe:      #00ff88;
+    --warn:      #ffb300;
+    --danger:    #ff1744;
+    --blue:      #00b8ff;
+    --purple:    #7c4dff;
+    --text:      #c8d8f0;
+    --dim:       #4a6080;
+    --mono:      'Share Tech Mono', monospace;
+    --body:      'Exo 2', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    font-family: var(--body);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(0,184,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,184,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridShift 20s linear infinite;
+  }
+  @keyframes gridShift { from { background-position: 0 0; } to { background-position: 40px 40px; } }
+
+  .everything { position: relative; z-index: 1; }
+
+  /* ── Header ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(8,15,30,0.9);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--safe);
+    box-shadow: 0 0 10px var(--safe);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+  .logo h1 { font-size: 14px; font-weight: 700; letter-spacing: 2px; color: var(--blue); text-transform: uppercase; }
+  .logo p  { font-size: 10px; color: var(--dim); letter-spacing: 1px; }
+  .header-right { display: flex; align-items: center; gap: 20px; }
+  .live-badge {
+    font-family: var(--mono); font-size: 10px; color: var(--safe);
+    border: 1px solid var(--safe); padding: 3px 10px; border-radius: 20px;
+    text-shadow: 0 0 8px var(--safe);
+  }
+  #clock { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+
+  /* ── Alert Banner ── */
+  #alert-banner {
+    padding: 10px 28px;
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    letter-spacing: 3px; text-align: center;
+    transition: all 0.3s;
+  }
+  .banner-safe    { background: rgba(0,255,136,0.08); color: var(--safe);   border-bottom: 1px solid rgba(0,255,136,0.2); }
+  .banner-warning { background: rgba(255,179,0,0.12); color: var(--warn);   border-bottom: 1px solid rgba(255,179,0,0.3); animation: blink 1s ease-in-out infinite; }
+  .banner-danger  { background: rgba(255,23,68,0.15); color: var(--danger); border-bottom: 1px solid rgba(255,23,68,0.4); animation: blink 0.4s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── Main Grid ── */
+  main { padding: 20px 24px; display: grid; gap: 16px; }
+  .row { display: grid; gap: 16px; }
+  .row-4 { grid-template-columns: repeat(4, 1fr); }
+  .row-3 { grid-template-columns: 2fr 1fr 1fr; }
+  .row-2 { grid-template-columns: 1fr 1fr; }
+
+  /* ── Panels ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .panel::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--blue), transparent);
+    opacity: 0.5;
+  }
+  .panel-title {
+    font-size: 9px; font-weight: 700; letter-spacing: 2px;
+    color: var(--dim); text-transform: uppercase; margin-bottom: 10px;
+  }
+
+  /* ── Big Metric Cards ── */
+  .metric-card { text-align: center; }
+  .metric-val {
+    font-family: var(--mono); font-size: 44px; font-weight: 700;
+    line-height: 1; margin: 4px 0;
+  }
+  .metric-unit { font-size: 11px; color: var(--dim); letter-spacing: 1px; }
+  .metric-label { font-size: 9px; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; }
+
+  /* ── Distance Gauge ── */
+  .gauge-container { display: flex; flex-direction: column; align-items: center; }
+  #gauge-svg { width: 180px; height: 110px; }
+
+  /* ── Alert Indicator ── */
+  .alert-box {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; min-height: 100px;
+  }
+  .alert-status {
+    font-family: var(--mono); font-size: 26px; font-weight: 700;
+    letter-spacing: 4px;
+  }
+  .alert-indicator {
+    width: 18px; height: 18px; border-radius: 50%;
+    transition: all 0.3s;
+  }
+  .leds { display: flex; gap: 14px; align-items: center; }
+  .led {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 1px solid #333; transition: all 0.3s;
+  }
+  .led.on-red    { background: var(--danger); box-shadow: 0 0 12px var(--danger); }
+  .led.on-green  { background: var(--safe);   box-shadow: 0 0 12px var(--safe); }
+  .led.on-blue   { background: var(--blue);   box-shadow: 0 0 12px var(--blue); }
+  .led.off       { background: #0d1a2a; box-shadow: none; }
+
+  /* ── Waveform Chart ── */
+  canvas { width: 100% !important; border-radius: 4px; }
+
+  /* ── OLED Simulation ── */
+  .oled {
+    background: #000a04;
+    border: 2px solid #1a3a2a;
+    border-radius: 6px;
+    padding: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #00ff88;
+    min-height: 100px;
+    line-height: 1.7;
+    text-shadow: 0 0 6px #00ff88;
+  }
+  .oled-divider { border-top: 1px solid #1a3a2a; margin: 4px 0; }
+
+  /* ── JSON Payload ── */
+  .mqtt-payload {
+    font-family: var(--mono); font-size: 11px;
+    color: #00b8ff; background: #020a14;
+    padding: 12px; border-radius: 6px;
+    border: 1px solid #0a2030;
+    line-height: 1.8;
+  }
+  .mqtt-key   { color: #7c4dff; }
+  .mqtt-num   { color: #00ff88; }
+  .mqtt-str   { color: var(--warn); }
+
+  /* ── Speed Bar ── */
+  .speed-bar-track {
+    background: #0d1a2a; border-radius: 4px;
+    height: 8px; margin-top: 8px; overflow: hidden;
+  }
+  .speed-bar-fill {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, var(--safe), var(--blue));
+    transition: width 0.4s ease;
+  }
+
+  /* ── MQTT Log ── */
+  .mqtt-log {
+    font-family: var(--mono); font-size: 10px;
+    height: 80px; overflow-y: auto;
+    background: #020810; padding: 8px;
+    border-radius: 4px; border: 1px solid var(--border);
+    color: #3a6080;
+  }
+  .mqtt-log .entry { margin-bottom: 2px; }
+  .mqtt-log .entry.danger  { color: var(--danger); }
+  .mqtt-log .entry.warning { color: var(--warn); }
+  .mqtt-log .entry.safe    { color: var(--safe); }
+
+  /* ── Footer ── */
+  footer {
+    padding: 12px 28px; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  footer span { font-size: 10px; color: var(--dim); letter-spacing: 1px; }
+
+  @media (max-width: 900px) {
+    .row-4 { grid-template-columns: repeat(2,1fr); }
+    .row-3, .row-2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="everything">
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <div>
+      <h1>IoT Automotive Range Detection</h1>
+      <p>NMIT Bengaluru · VTU · Academic Year 2026–27</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="live-badge">● LIVE SIMULATION</span>
+    <span id="clock">--:--:--</span>
+  </div>
+</header>
+
+<!-- ── Alert Banner ── -->
+<div id="alert-banner" class="banner-safe">● SYSTEM STATUS: SAFE</div>
+
+<!-- ── Main ── -->
+<main>
+
+  <!-- Row 1: Key Metrics -->
+  <div class="row row-4">
+    <div class="panel metric-card">
+      <div class="panel-title">Fused Distance</div>
+      <div class="metric-val" id="dist-val" style="color:var(--blue)">---</div>
+      <div class="metric-unit">cm</div>
+      <div class="metric-label">Kalman Filtered</div>
+    </div>
+    <div class="panel metric-card">
+      <div class="panel-title">Safe Distance</div>
+      <div class="metric-val" id="safe-val" style="color:var(--warn)">---</div>
+      <div class="metric-unit">cm</div>
+      <div class="metric-label">Dynamic (GPS-based)</div>
+    </div>
+    <div class="panel metric-card">
+      <div class="panel-title">Vehicle Speed</div>
+      <div class="metric-val" id="speed-val" style="color:var(--purple)">---</div>
+      <div class="metric-unit">km/h</div>
+      <div class="metric-label">NEO-6M GPS</div>
+      <div class="speed-bar-track"><div class="speed-bar-fill" id="speed-bar" style="width:0%"></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Alert Status</div>
+      <div class="alert-box">
+        <div class="alert-status" id="alert-text">SAFE</div>
+        <div class="leds">
+          <div>
+            <div style="font-size:8px;color:var(--dim);text-align:center;margin-bottom:4px">RED</div>
+            <div class="led off" id="led-r"></div>
+          </div>
+          <div>
+            <div style="font-size:8px;color:var(--dim);text-align:center;margin-bottom:4px">GRN</div>
+            <div class="led on-green" id="led-g"></div>
+          </div>
+          <div>
+            <div style="font-size:8px;color:var(--dim);text-align:center;margin-bottom:4px">BLU</div>
+            <div class="led off" id="led-b"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 2: Chart + OLED + MQTT payload -->
+  <div class="row row-3">
+    <!-- Live waveform -->
+    <div class="panel">
+      <div class="panel-title">Live Sensor Telemetry — 5 Hz</div>
+      <canvas id="chart" height="130"></canvas>
+    </div>
+
+    <!-- OLED simulation -->
+    <div class="panel">
+      <div class="panel-title">OLED Display Simulation (SSD1306)</div>
+      <div class="oled" id="oled-display">
+        IoT RANGE DETECTOR<br>
+        <div class="oled-divider"></div>
+        DIST: --- cm<br>
+        SPD : --- km/h<br>
+        SAFE: --- cm<br>
+        <div class="oled-divider"></div>
+        STATUS: [ SAFE ]
+      </div>
+    </div>
+
+    <!-- MQTT payload -->
+    <div class="panel">
+      <div class="panel-title">MQTT JSON Payload — topic: iot/vehicle/range</div>
+      <div class="mqtt-payload" id="mqtt-json">
+        {<br>
+        &nbsp;&nbsp;<span class="mqtt-key">"distance_cm"</span>: <span class="mqtt-num" id="j-dist">---</span>,<br>
+        &nbsp;&nbsp;<span class="mqtt-key">"speed_kmh"</span>: <span class="mqtt-num" id="j-spd">---</span>,<br>
+        &nbsp;&nbsp;<span class="mqtt-key">"safe_dist_cm"</span>: <span class="mqtt-num" id="j-safe">---</span>,<br>
+        &nbsp;&nbsp;<span class="mqtt-key">"sensor1_cm"</span>: <span class="mqtt-num" id="j-s1">---</span>,<br>
+        &nbsp;&nbsp;<span class="mqtt-key">"sensor2_cm"</span>: <span class="mqtt-num" id="j-s2">---</span>,<br>
+        &nbsp;&nbsp;<span class="mqtt-key">"alert_level"</span>: <span class="mqtt-str" id="j-alert">0</span>,<br>
+        &nbsp;&nbsp;<span class="mqtt-key">"timestamp"</span>: <span class="mqtt-str" id="j-ts">"---"</span><br>
+        }
+      </div>
+      <div style="margin-top:8px">
+        <div class="panel-title">MQTT Broker Log</div>
+        <div class="mqtt-log" id="mqtt-log"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Sensor comparison + Kalman params -->
+  <div class="row row-2">
+    <div class="panel">
+      <div class="panel-title">Sensor Raw vs Fused Comparison</div>
+      <canvas id="bar-chart" height="100"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">System Parameters & Algorithm Config</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+        <div style="background:#020a14;padding:10px;border-radius:6px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:6px">KALMAN FILTER</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--blue);line-height:2">
+            Q = 0.01<br>R = 0.50<br>Update: 200 ms<br>Mode: Dual-pass
+          </div>
+        </div>
+        <div style="background:#020a14;padding:10px;border-radius:6px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:6px">SAFE DISTANCE</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--warn);line-height:2">
+            tᵣ = 0.7 s<br>a  = 7.0 m/s²<br>Formula: IS 11556<br>Update: per GPS
+          </div>
+        </div>
+        <div style="background:#020a14;padding:10px;border-radius:6px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:6px">IoT PIPELINE</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--safe);line-height:2">
+            Proto: MQTT<br>Broker: HiveMQ<br>Rate: ≥5 Hz<br>Target: &lt;50 ms
+          </div>
+        </div>
+        <div style="background:#020a14;padding:10px;border-radius:6px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:6px">HARDWARE</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--purple);line-height:2">
+            MCU: ESP32<br>S1: HC-SR04<br>S2: TF-Luna<br>GPS: NEO-6M
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <span>Ajinkya Bhagwat (1NT23ME007) · Manan Kabra (1NT23ME026) · Rishita Modi (1NT23ME038)</span>
+  <span>Guide: Dr. Abdulrajak Buradi · Dept. of Mechanical Engineering · NMIT</span>
+</footer>
+
+</div>
+
+<!-- ── Chart.js ── -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// ── Simulation Engine ────────────────────────────────────────────────
+const HISTORY = 60;
+let   t        = 0;
+let   speedKmh = 0;
+let   speedDir = 1;
+let   trueDist = 400;
+let   trueDir  = -1;
+let   msgCount = 0;
+
+const distHistory  = Array(HISTORY).fill(null);
+const s1History    = Array(HISTORY).fill(null);
+const s2History    = Array(HISTORY).fill(null);
+const safeHistory  = Array(HISTORY).fill(null);
+const labels       = Array(HISTORY).fill('');
+
+// Kalman state
+let kf_x = 400, kf_p = 1.0;
+const KF_Q = 0.01, KF_R = 0.5;
+
+function kalmanUpdate(z) {
+  kf_p = kf_p + KF_Q;
+  const K = kf_p / (kf_p + KF_R);
+  kf_x = kf_x + K * (z - kf_x);
+  kf_p = (1 - K) * kf_p;
+  return kf_x;
+}
+
+function safeDistance(spd) {
+  const v  = spd / 3.6;
+  return Math.max(20, (v * 0.7 + v * v / 14.0) * 100);
+}
+
+function randn() {
+  let u=0, v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+// ── Chart setup ─────────────────────────────────────────────────────
+const ctx = document.getElementById('chart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      { label: 'HC-SR04 Raw',  data: [...s1History],   borderColor:'#f72585', borderWidth:1, pointRadius:0, tension:0.2 },
+      { label: 'TF-Luna Raw',  data: [...s2History],   borderColor:'#4cc9f0', borderWidth:1, pointRadius:0, tension:0.2 },
+      { label: 'Kalman Fused', data: [...distHistory], borderColor:'#ffe566', borderWidth:2.5, pointRadius:0, tension:0.3 },
+      { label: 'Safe Distance',data: [...safeHistory], borderColor:'#ff6b35', borderWidth:1.5, borderDash:[5,3], pointRadius:0, tension:0.2 },
+    ]
+  },
+  options: {
+    animation: false,
+    responsive: true,
+    plugins: { legend:{ labels:{ color:'#7090b0', font:{size:10}, boxWidth:20 }}},
+    scales: {
+      x: { display:false },
+      y: {
+        min: 0, max: 600,
+        grid: { color:'#0d2040' },
+        ticks: { color:'#4a6080', font:{size:9} }
+      }
+    }
+  }
+});
+
+// ── Bar chart (raw vs fused) ─────────────────────────────────────────
+const bctx = document.getElementById('bar-chart').getContext('2d');
+const barChart = new Chart(bctx, {
+  type: 'bar',
+  data: {
+    labels: ['HC-SR04', 'TF-Luna', 'Kalman Fused'],
+    datasets:[{ label:'Current Reading (cm)', data:[0,0,0],
+      backgroundColor:['rgba(247,37,133,0.6)','rgba(76,201,240,0.6)','rgba(255,229,102,0.8)'],
+      borderColor:['#f72585','#4cc9f0','#ffe566'], borderWidth:1 }]
+  },
+  options: {
+    animation: { duration: 300 },
+    responsive: true,
+    plugins: { legend:{ display:false }},
+    scales: {
+      x: { grid:{color:'#0d2040'}, ticks:{color:'#4a6080',font:{size:10}} },
+      y: { min:0, max:600, grid:{color:'#0d2040'}, ticks:{color:'#4a6080',font:{size:9}} }
+    }
+  }
+});
+
+// ── Clock ─────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-IN', {hour12:false});
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── Main simulation tick ─────────────────────────────────────────────
+function tick() {
+  t++;
+
+  // Update simulated speed (0–80 km/h oscillating)
+  speedKmh += speedDir * 0.4;
+  if (speedKmh > 80) speedDir = -1;
+  if (speedKmh < 0)  speedDir =  1;
+
+  // Update true distance (vehicle approaching/receding)
+  trueDist += trueDir * (1.5 + speedKmh * 0.04);
+  if (trueDist < 30)  trueDir =  1;
+  if (trueDist > 550) trueDir = -1;
+
+  // Sensor readings with realistic noise
+  const s1 = Math.max(2, Math.min(600, trueDist + randn()*8 + (Math.random()<0.05 ? (Math.random()-0.5)*60 : 0)));
+  const s2 = Math.max(2, Math.min(600, trueDist + randn()*2.5));
+
+  // Kalman fusion
+  kalmanUpdate(s1);
+  const fused = kalmanUpdate((s1 + s2) / 2);
+
+  // Safe distance
+  const safe = safeDistance(speedKmh);
+
+  // Alert level
+  let level = 0;
+  if      (fused < safe * 0.5) level = 2;
+  else if (fused < safe)       level = 1;
+
+  // Push to history
+  distHistory.push(Math.round(fused*10)/10);  distHistory.shift();
+  s1History.push(Math.round(s1*10)/10);        s1History.shift();
+  s2History.push(Math.round(s2*10)/10);        s2History.shift();
+  safeHistory.push(Math.round(safe*10)/10);    safeHistory.shift();
+
+  // Update chart
+  chart.data.datasets[0].data = [...s1History];
+  chart.data.datasets[1].data = [...s2History];
+  chart.data.datasets[2].data = [...distHistory];
+  chart.data.datasets[3].data = [...safeHistory];
+  chart.update();
+
+  // Bar chart
+  barChart.data.datasets[0].data = [Math.round(s1), Math.round(s2), Math.round(fused)];
+  barChart.update();
+
+  // ── Update DOM ────────────────────────────────────────────────────
+  document.getElementById('dist-val').textContent  = Math.round(fused);
+  document.getElementById('safe-val').textContent  = Math.round(safe);
+  document.getElementById('speed-val').textContent = Math.round(speedKmh);
+  document.getElementById('speed-bar').style.width = (speedKmh/120*100)+'%';
+
+  // OLED
+  const statusText = ['[ SAFE ]', '[WARNING]', '[DANGER!]'][level];
+  document.getElementById('oled-display').innerHTML =
+    `IoT RANGE DETECTOR<div class="oled-divider"></div>` +
+    `DIST: ${Math.round(fused)} cm<br>` +
+    `SPD : ${Math.round(speedKmh)} km/h<br>` +
+    `SAFE: ${Math.round(safe)} cm<br>` +
+    `<div class="oled-divider"></div>STATUS: ${statusText}`;
+
+  // MQTT JSON
+  const ts = new Date().toISOString().split('.')[0]+'Z';
+  document.getElementById('j-dist').textContent  = (Math.round(fused*10)/10);
+  document.getElementById('j-spd').textContent   = (Math.round(speedKmh*10)/10);
+  document.getElementById('j-safe').textContent  = (Math.round(safe*10)/10);
+  document.getElementById('j-s1').textContent    = (Math.round(s1*10)/10);
+  document.getElementById('j-s2').textContent    = (Math.round(s2*10)/10);
+  document.getElementById('j-alert').textContent = level;
+  document.getElementById('j-ts').textContent    = `"${ts}"`;
+
+  // LEDs
+  const r = document.getElementById('led-r');
+  const g = document.getElementById('led-g');
+  const b = document.getElementById('led-b');
+  r.className = 'led ' + (level===2 ? 'on-red'   : 'off');
+  g.className = 'led ' + (level===0 ? 'on-green'  : 'off');
+  b.className = 'led ' + (level===1 ? 'on-blue'   : 'off');
+
+  // Alert text + banner
+  const alertEl  = document.getElementById('alert-text');
+  const banner   = document.getElementById('alert-banner');
+  const labels_a = ['SAFE','WARNING','DANGER'];
+  alertEl.textContent = labels_a[level];
+  alertEl.style.color = [,'var(--safe)','var(--warn)','var(--danger)'][level+1] || 'var(--safe)';
+  if (level===0) { banner.className='banner-safe';    banner.textContent='● SYSTEM STATUS: SAFE — Distance is within safe threshold'; }
+  if (level===1) { banner.className='banner-warning'; banner.textContent='⚠ WARNING — Approaching safe following distance limit'; }
+  if (level===2) { banner.className='banner-danger';  banner.textContent='🚨 DANGER — COLLISION RISK! Fused distance below 50% of safe threshold'; }
+
+  // MQTT log
+  msgCount++;
+  const log  = document.getElementById('mqtt-log');
+  const cls  = ['safe','warning','danger'][level];
+  const entry = document.createElement('div');
+  entry.className = `entry ${cls}`;
+  entry.textContent = `[MSG #${msgCount}] ${ts} → dist=${Math.round(fused)}cm spd=${Math.round(speedKmh)}km/h alert=${level}`;
+  log.prepend(entry);
+  while (log.children.length > 20) log.removeChild(log.lastChild);
+}
+
+setInterval(tick, 200); // 5 Hz
+tick();
+</script>
+</body>
+</html>

@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT Range Detection — Interactive Simulator</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+:root {
+  --bg:      #04080f;
+  --panel:   #080f1c;
+  --border:  #0d1e35;
+  --safe:    #00ff9d;
+  --warn:    #ffb700;
+  --danger:  #ff2d55;
+  --blue:    #00aaff;
+  --purple:  #9b5de5;
+  --text:    #c8dff0;
+  --dim:     #3a5570;
+  --mono:    'JetBrains Mono', monospace;
+  --display: 'Syne', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  font-family: var(--display);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Animated grid */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background-image:
+    linear-gradient(rgba(0,170,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,170,255,0.025) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+.wrap { position: relative; z-index: 1; max-width: 1300px; margin: 0 auto; padding: 20px; }
+
+/* ── Header ── */
+header {
+  text-align: center;
+  padding: 28px 0 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+header .badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--blue);
+  border: 1px solid var(--blue);
+  padding: 3px 12px;
+  border-radius: 20px;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+  text-shadow: 0 0 8px var(--blue);
+}
+header h1 {
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+header p { font-size: 12px; color: var(--dim); letter-spacing: 1px; }
+
+/* ── Alert Banner ── */
+#alert-banner {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-align: center;
+  margin-bottom: 20px;
+  transition: all 0.3s;
+}
+.safe-b    { background: rgba(0,255,157,0.08); color: var(--safe);   border: 1px solid rgba(0,255,157,0.3); }
+.warning-b { background: rgba(255,183,0,0.1);  color: var(--warn);   border: 1px solid rgba(255,183,0,0.4); animation: blink 1s infinite; }
+.danger-b  { background: rgba(255,45,85,0.12); color: var(--danger); border: 1px solid rgba(255,45,85,0.5); animation: blink 0.35s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── Main Grid ── */
+.grid { display: grid; gap: 16px; }
+.row-2   { grid-template-columns: 1fr 1fr; }
+.row-3   { grid-template-columns: 1fr 1fr 1fr; }
+.row-top { grid-template-columns: 380px 1fr; }
+
+/* ── Panels ── */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+.panel::before {
+  content: '';
+  position: absolute; top:0; left:0; right:0; height:2px;
+  background: linear-gradient(90deg, transparent, var(--blue), transparent);
+  opacity: 0.4;
+}
+.panel-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+/* ── Sliders ── */
+.slider-group { margin-bottom: 20px; }
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.slider-label { font-size: 12px; font-weight: 600; color: var(--text); }
+.slider-val {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--blue);
+}
+.slider-unit { font-size: 10px; color: var(--dim); }
+
+input[type="range"] {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+#speed-slider { background: linear-gradient(90deg, var(--purple) var(--pct,0%), var(--border) var(--pct,0%)); }
+#dist-slider  { background: linear-gradient(90deg, var(--blue) var(--pct2,0%), var(--border) var(--pct2,0%)); }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(255,255,255,0.4);
+  cursor: pointer;
+}
+
+/* ── Big numbers ── */
+.big-num {
+  font-family: var(--mono);
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  transition: color 0.3s;
+}
+.metric-label { font-size: 10px; color: var(--dim); letter-spacing: 2px; margin-top: 6px; }
+.metric-sub   { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 4px; }
+
+/* ── Alert Zones ── */
+.zone-bar {
+  height: 28px;
+  border-radius: 6px;
+  background: var(--border);
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.zone-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s, background 0.3s;
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+}
+.zone-fill span {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: #000;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.zone-label {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+
+/* ── Kalman Viz ── */
+.kf-step {
+  padding: 10px 14px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 6px;
+  border-left: 3px solid var(--blue);
+  margin-bottom: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.8;
+}
+.kf-step .step-title { color: var(--blue); font-weight: 700; font-size: 9px; letter-spacing: 1px; margin-bottom: 4px; }
+.kf-val { color: #fff; font-weight: 600; }
+.kf-formula { color: var(--dim); font-size: 10px; }
+
+/* ── OLED ── */
+.oled {
+  background: #000a04;
+  border: 2px solid #1a3a24;
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: #00ff9d;
+  text-shadow: 0 0 8px #00ff9d;
+  line-height: 1.9;
+}
+.oled-divider { border-top: 1px solid #1a3a24; margin: 6px 0; }
+
+/* ── LEDs ── */
+.leds { display: flex; gap: 20px; justify-content: center; margin-top: 12px; }
+.led-wrap { text-align: center; }
+.led {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  margin: 0 auto 5px;
+  border: 1px solid #222;
+  transition: all 0.3s;
+}
+.led.on-r { background: var(--danger); box-shadow: 0 0 16px var(--danger), 0 0 30px rgba(255,45,85,0.4); }
+.led.on-g { background: var(--safe);   box-shadow: 0 0 16px var(--safe),   0 0 30px rgba(0,255,157,0.4); }
+.led.on-b { background: var(--blue);   box-shadow: 0 0 16px var(--blue),   0 0 30px rgba(0,170,255,0.4); }
+.led.off  { background: #0d1a2a; }
+.led-lbl  { font-family: var(--mono); font-size: 8px; color: var(--dim); letter-spacing: 1px; }
+
+/* ── MQTT JSON ── */
+.json-box {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: #020810;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  line-height: 2;
+}
+.jk { color: var(--purple); }
+.jv { color: var(--safe); }
+.js { color: var(--warn); }
+
+/* ── Static vs Dynamic comparison ── */
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+.comp-box {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid;
+}
+.comp-box.static  { background: rgba(255,45,85,0.06);  border-color: var(--danger); }
+.comp-box.dynamic { background: rgba(0,255,157,0.06);  border-color: var(--safe); }
+.comp-title { font-size: 10px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
+.comp-box.static  .comp-title { color: var(--danger); }
+.comp-box.dynamic .comp-title { color: var(--safe); }
+.comp-item { font-family: var(--mono); font-size: 10px; color: var(--text); margin-bottom: 4px; }
+
+/* ── Canvas chart ── */
+canvas { width: 100% !important; border-radius: 6px; }
+
+/* ── Scrolling log ── */
+.log {
+  font-family: var(--mono);
+  font-size: 10px;
+  height: 90px;
+  overflow-y: auto;
+  background: #020810;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.log .entry { margin-bottom: 2px; }
+.log .s { color: var(--safe); }
+.log .w { color: var(--warn); }
+.log .d { color: var(--danger); }
+
+@media (max-width: 900px) {
+  .row-2, .row-3, .row-top { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="badge">● INTERACTIVE SIMULATOR</div>
+  <h1>IoT Automotive Range Detection System</h1>
+  <p>DRAG THE SLIDERS — watch Kalman filter, safe distance & alerts update in real time · NMIT Bengaluru · VTU 2026-27</p>
+</header>
+
+<div id="alert-banner" class="safe-b">● SYSTEM STATUS: SAFE — Distance is within safe threshold</div>
+
+<div class="grid" style="margin-bottom:16px">
+<div class="row-top grid">
+
+  <!-- LEFT: Controls -->
+  <div class="panel">
+    <div class="panel-title">Interactive Controls — Drag to Simulate</div>
+
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-label">🚗 Vehicle Speed (GPS)</span>
+        <span><span class="slider-val" id="spd-disp">0</span> <span class="slider-unit">km/h</span></span>
+      </div>
+      <input type="range" id="speed-slider" min="0" max="120" value="0" step="1">
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">0 km/h</span>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">120 km/h</span>
+      </div>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-label">📡 Obstacle Distance (True)</span>
+        <span><span class="slider-val" id="dist-disp" style="color:var(--blue)">400</span> <span class="slider-unit">cm</span></span>
+      </div>
+      <input type="range" id="dist-slider" min="10" max="600" value="400" step="1">
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">10 cm</span>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">600 cm</span>
+      </div>
+    </div>
+
+    <!-- OLED -->
+    <div class="panel-title" style="margin-top:8px">SSD1306 OLED Display Simulation</div>
+    <div class="oled" id="oled">
+      IoT RANGE DETECTOR<div class="oled-divider"></div>
+      DIST: --- cm<br>SPD : --- km/h<br>SAFE: --- cm<div class="oled-divider"></div>
+      STATUS: [ SAFE ]
+    </div>
+
+    <!-- LEDs -->
+    <div class="leds">
+      <div class="led-wrap"><div class="led off" id="led-r"></div><div class="led-lbl">DANGER</div></div>
+      <div class="led-wrap"><div class="led on-g" id="led-g"></div><div class="led-lbl">SAFE</div></div>
+      <div class="led-wrap"><div class="led off" id="led-b"></div><div class="led-lbl">WARN</div></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Live metrics -->
+  <div class="grid" style="grid-template-rows: auto auto; gap:16px">
+    <div class="row-3 grid">
+      <div class="panel" style="text-align:center">
+        <div class="panel-title">Kalman Fused Distance</div>
+        <div class="big-num" id="fused-num" style="color:var(--blue)">---</div>
+        <div class="metric-label">CM — FILTERED</div>
+        <div class="metric-sub" id="fused-sub">MAE target: ±2 cm</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="panel-title">Dynamic Safe Distance</div>
+        <div class="big-num" id="safe-num" style="color:var(--warn)">---</div>
+        <div class="metric-label">CM — IS 11556</div>
+        <div class="metric-sub" id="safe-sub">v×0.7 + v²/14</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="panel-title">Alert Status</div>
+        <div class="big-num" id="alert-num" style="color:var(--safe);font-size:32px;margin-top:8px">SAFE</div>
+        <div class="metric-label" style="margin-top:8px">CURRENT LEVEL</div>
+        <div class="metric-sub" id="margin-sub">Margin: --- cm</div>
+      </div>
+    </div>
+
+    <!-- Alert zone bars -->
+    <div class="panel">
+      <div class="panel-title">Alert Zone Visualisation — Distance vs Threshold</div>
+      <div class="zone-label"><span>0 cm</span><span id="zone-mid">--- cm (50% threshold)</span><span id="zone-max">--- cm (safe threshold)</span></div>
+      <div class="zone-bar">
+        <div class="zone-fill" id="zone-fill" style="width:50%;background:var(--safe)">
+          <span id="zone-text">SAFE</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:8px">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--safe)">■ SAFE  fused ≥ d_safe</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--warn)">■ WARN  fused ≥ 50%</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--danger)">■ DANGER  fused &lt; 50%</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end row-top -->
+</div>
+
+<!-- Row 2: Kalman steps + MQTT + comparison -->
+<div class="row-3 grid" style="margin-bottom:16px">
+
+  <!-- Kalman steps -->
+  <div class="panel">
+    <div class="panel-title">Kalman Filter — Live Computation (Q=0.01, R=0.50)</div>
+    <div class="kf-step">
+      <div class="step-title">SENSOR READINGS</div>
+      HC-SR04: <span class="kf-val" id="kf-s1">---</span> cm &nbsp;(noise ±8cm)<br>
+      TF-Luna: <span class="kf-val" id="kf-s2">---</span> cm &nbsp;(noise ±2.5cm)
+    </div>
+    <div class="kf-step">
+      <div class="step-title">PREDICT STEP</div>
+      P = P + Q &nbsp;→&nbsp; P = <span class="kf-val" id="kf-p">---</span><br>
+      <span class="kf-formula">Uncertainty grows slightly each cycle</span>
+    </div>
+    <div class="kf-step">
+      <div class="step-title">UPDATE PASS 1 — HC-SR04</div>
+      K₁ = P/(P+R) = <span class="kf-val" id="kf-k1">---</span><br>
+      x = x + K₁×(z₁−x) = <span class="kf-val" id="kf-x1">---</span> cm
+    </div>
+    <div class="kf-step" style="border-left-color:var(--safe)">
+      <div class="step-title" style="color:var(--safe)">UPDATE PASS 2 — TF-Luna (R×0.25)</div>
+      K₂ = P/(P+R×0.25) = <span class="kf-val" id="kf-k2">---</span><br>
+      x_fused = <span class="kf-val" id="kf-x2" style="color:var(--safe)">---</span> cm &nbsp;✓ Final output
+    </div>
+  </div>
+
+  <!-- MQTT JSON -->
+  <div class="panel">
+    <div class="panel-title">MQTT JSON Payload — topic: iot/vehicle/range</div>
+    <div class="json-box">
+      {<br>
+      &nbsp;&nbsp;<span class="jk">"distance_cm"</span>: <span class="jv" id="j-dist">---</span>,<br>
+      &nbsp;&nbsp;<span class="jk">"speed_kmh"</span>: <span class="jv" id="j-spd">---</span>,<br>
+      &nbsp;&nbsp;<span class="jk">"safe_dist_cm"</span>: <span class="jv" id="j-safe">---</span>,<br>
+      &nbsp;&nbsp;<span class="jk">"sensor1_cm"</span>: <span class="jv" id="j-s1">---</span>,<br>
+      &nbsp;&nbsp;<span class="jk">"sensor2_cm"</span>: <span class="jv" id="j-s2">---</span>,<br>
+      &nbsp;&nbsp;<span class="jk">"alert_level"</span>: <span class="js" id="j-alert">0</span>,<br>
+      &nbsp;&nbsp;<span class="jk">"alert_status"</span>: <span class="js" id="j-status">"SAFE"</span>,<br>
+      &nbsp;&nbsp;<span class="jk">"timestamp"</span>: <span class="js" id="j-ts">"---"</span><br>
+      }
+    </div>
+    <div style="margin-top:10px">
+      <div class="panel-title">MQTT Broker Log</div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <!-- Static vs Dynamic comparison -->
+  <div class="panel">
+    <div class="panel-title">Static vs Dynamic Threshold — Live Comparison</div>
+
+    <div style="font-family:var(--mono);font-size:11px;margin-bottom:10px">
+      Current speed: <span style="color:var(--blue)" id="cmp-spd">0</span> km/h &nbsp;|&nbsp;
+      True dist: <span style="color:var(--blue)" id="cmp-dist">400</span> cm
+    </div>
+
+    <div class="comparison">
+      <div class="comp-box static">
+        <div class="comp-title">❌ STATIC (150cm fixed)</div>
+        <div class="comp-item">Threshold: <strong>150 cm always</strong></div>
+        <div class="comp-item">At 80 km/h needs: <strong>507 cm</strong></div>
+        <div class="comp-item">Result: <span id="static-result" style="color:var(--safe)">SAFE</span></div>
+        <div class="comp-item" id="static-warn" style="color:var(--danger);font-size:9px;margin-top:4px"></div>
+      </div>
+      <div class="comp-box dynamic">
+        <div class="comp-title">✅ DYNAMIC (GPS-adaptive)</div>
+        <div class="comp-item">Threshold: <strong id="dyn-thresh">--- cm</strong></div>
+        <div class="comp-item">Physically correct always</div>
+        <div class="comp-item">Result: <span id="dynamic-result" style="color:var(--safe)">SAFE</span></div>
+        <div class="comp-item" id="dynamic-note" style="color:var(--safe);font-size:9px;margin-top:4px"></div>
+      </div>
+    </div>
+
+    <!-- Safe dist curve mini -->
+    <div style="margin-top:12px">
+      <div class="panel-title">Safe Distance Curve — Your Speed Highlighted</div>
+      <canvas id="curve-chart" height="120"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- Row 3: History chart -->
+<div class="panel" style="margin-bottom:16px">
+  <div class="panel-title">Live Distance History — Last 60 Readings (Auto-updates with slider)</div>
+  <canvas id="hist-chart" height="100"></canvas>
+</div>
+
+<!-- Footer -->
+<div style="text-align:center;padding:16px 0;border-top:1px solid var(--border)">
+  <span style="font-family:var(--mono);font-size:10px;color:var(--dim)">
+    Ajinkya Bhagwat · Manan Kabra · Rishita Modi &nbsp;|&nbsp; NMIT Bengaluru · VTU &nbsp;|&nbsp; Academic Year 2026-27
+  </span>
+</div>
+
+</div><!-- wrap -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// ── State ────────────────────────────────────────────────────────────
+let kf_x = 300, kf_p = 1.0;
+const KF_Q = 0.01, KF_R = 0.5;
+let msgCount = 0;
+let histDist = Array(60).fill(null);
+let histSafe = Array(60).fill(null);
+let histLabels = Array(60).fill('');
+let autoMode = false;
+let autoT = 0;
+
+// ── Helpers ──────────────────────────────────────────────────────────
+function randn() {
+  let u=0,v=0;
+  while(!u) u=Math.random(); while(!v) v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+function kalmanUpdate(z, R) {
+  kf_p = kf_p + KF_Q;
+  const K = kf_p / (kf_p + R);
+  kf_x = kf_x + K * (z - kf_x);
+  kf_p = (1 - K) * kf_p;
+  return { K, x: kf_x, p: kf_p };
+}
+
+function safeDistance(spd) {
+  const v = spd / 3.6;
+  return Math.max(20, (v * 0.7 + v * v / 14.0) * 100);
+}
+
+// ── Chart: history ───────────────────────────────────────────────────
+const hctx = document.getElementById('hist-chart').getContext('2d');
+const histChart = new Chart(hctx, {
+  type: 'line',
+  data: {
+    labels: histLabels,
+    datasets: [
+      { label: 'HC-SR04 Raw', data: [...histDist], borderColor:'#f72585', borderWidth:1, pointRadius:0, tension:0.3 },
+      { label: 'Kalman Fused', data: [...histDist], borderColor:'#ffe566', borderWidth:2.5, pointRadius:0, tension:0.4 },
+      { label: 'Safe Threshold', data: [...histSafe], borderColor:'#ff6b35', borderWidth:1.5, borderDash:[5,3], pointRadius:0 },
+    ]
+  },
+  options: {
+    animation: false, responsive: true,
+    plugins: { legend: { labels: { color:'#7090b0', font:{size:10}, boxWidth:20 }}},
+    scales: {
+      x: { display:false },
+      y: { min:0, max:650, grid:{color:'#0d2040'}, ticks:{color:'#4a6080',font:{size:9}} }
+    }
+  }
+});
+
+// ── Chart: safe dist curve ───────────────────────────────────────────
+const cctx = document.getElementById('curve-chart').getContext('2d');
+const speedRange = Array.from({length:121},(_,i)=>i);
+const sdCurve = speedRange.map(s=>safeDistance(s));
+const curveChart = new Chart(cctx, {
+  type: 'line',
+  data: {
+    labels: speedRange,
+    datasets: [
+      { label:'Safe Distance', data:sdCurve, borderColor:'#ff6b35', borderWidth:2, pointRadius:0, fill:true, backgroundColor:'rgba(255,107,53,0.08)', tension:0.3 },
+      { label:'Your Speed', data:[], borderColor:'#00aaff', borderWidth:0, pointRadius:6, pointBackgroundColor:'#00aaff', showLine:false },
+    ]
+  },
+  options: {
+    animation:false, responsive:true,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{ grid:{color:'#0d2040'}, ticks:{color:'#4a6080',font:{size:8},maxTicksLimit:7} },
+      y:{ min:0, max:800, grid:{color:'#0d2040'}, ticks:{color:'#4a6080',font:{size:8}} }
+    }
+  }
+});
+
+// ── Main update ──────────────────────────────────────────────────────
+let s1Prev=300, s2Prev=300;
+
+function update() {
+  const speed = parseFloat(document.getElementById('speed-slider').value);
+  const trueDist = parseFloat(document.getElementById('dist-slider').value);
+
+  // Slider UI
+  document.getElementById('spd-disp').textContent  = Math.round(speed);
+  document.getElementById('dist-disp').textContent = Math.round(trueDist);
+  const spc = (speed/120*100).toFixed(1);
+  const dpc = ((trueDist-10)/590*100).toFixed(1);
+  document.getElementById('speed-slider').style.setProperty('--pct', spc+'%');
+  document.getElementById('dist-slider').style.setProperty('--pct2', dpc+'%');
+
+  // Sensor readings
+  let n1 = randn()*8;
+  let n2 = randn()*2.5;
+  if (Math.random() < 0.05) n1 += (Math.random()>0.5?1:-1)*Math.random()*40;
+  const s1 = Math.max(2, Math.min(600, trueDist + n1));
+  const s2 = Math.max(2, Math.min(600, trueDist + n2));
+
+  // Kalman — dual pass
+  const r1 = kalmanUpdate(s1, KF_R);
+  const K1 = r1.K; const x1 = r1.x;
+  const r2 = kalmanUpdate((s1+s2)/2, KF_R*0.25);
+  const K2 = r2.K; const fused = r2.x;
+  const p_val = r2.p;
+
+  // Safe distance
+  const safe = safeDistance(speed);
+
+  // Alert level
+  let level = 0;
+  if      (fused < safe*0.5) level = 2;
+  else if (fused < safe)     level = 1;
+
+  const lnames = ['SAFE','WARNING','DANGER'];
+  const lcolors = ['var(--safe)','var(--warn)','var(--danger)'];
+  const lbanner = ['safe-b','warning-b','danger-b'];
+
+  // ── Update DOM ────────────────────────────────────────────────────
+  // Big numbers
+  const fn = document.getElementById('fused-num');
+  fn.textContent = Math.round(fused);
+  fn.style.color = lcolors[level];
+
+  document.getElementById('safe-num').textContent  = Math.round(safe);
+  const an = document.getElementById('alert-num');
+  an.textContent   = lnames[level];
+  an.style.color   = lcolors[level];
+  const margin = fused - safe;
+  document.getElementById('margin-sub').textContent = `Margin: ${margin>0?'+':''}${Math.round(margin)} cm`;
+  document.getElementById('fused-sub').textContent  = `True dist: ${Math.round(trueDist)} cm | Δ=${Math.abs(Math.round(fused-trueDist))} cm`;
+
+  // Banner
+  const banner = document.getElementById('alert-banner');
+  banner.className = lbanner[level];
+  if (level===0) banner.textContent = '● SYSTEM STATUS: SAFE — Distance is within safe threshold';
+  if (level===1) banner.textContent = '⚠ WARNING — Vehicle approaching safe following distance limit';
+  if (level===2) banner.textContent = '🚨 DANGER — COLLISION RISK! Distance below 50% of safe threshold';
+
+  // OLED
+  const statuses = ['[ SAFE ]','[WARNING]','[DANGER!]'];
+  document.getElementById('oled').innerHTML =
+    `IoT RANGE DETECTOR<div class="oled-divider"></div>` +
+    `DIST: ${Math.round(fused)} cm<br>SPD : ${Math.round(speed)} km/h<br>SAFE: ${Math.round(safe)} cm` +
+    `<div class="oled-divider"></div>STATUS: ${statuses[level]}`;
+
+  // LEDs
+  document.getElementById('led-r').className = 'led ' + (level===2?'on-r':'off');
+  document.getElementById('led-g').className = 'led ' + (level===0?'on-g':'off');
+  document.getElementById('led-b').className = 'led ' + (level===1?'on-b':'off');
+
+  // Zone bar
+  const pct = Math.min(100, Math.max(2, (fused/safe)*100));
+  const zoneFill = document.getElementById('zone-fill');
+  const zoneColors = ['var(--safe)','var(--warn)','var(--danger)'];
+  zoneFill.style.width = pct + '%';
+  zoneFill.style.background = zoneColors[level];
+  document.getElementById('zone-text').textContent = lnames[level];
+  document.getElementById('zone-mid').textContent = `${Math.round(safe*0.5)} cm (50% threshold)`;
+  document.getElementById('zone-max').textContent = `${Math.round(safe)} cm (safe threshold)`;
+
+  // Kalman steps
+  document.getElementById('kf-s1').textContent = s1.toFixed(1);
+  document.getElementById('kf-s2').textContent = s2.toFixed(1);
+  document.getElementById('kf-p').textContent  = p_val.toFixed(4);
+  document.getElementById('kf-k1').textContent = K1.toFixed(4);
+  document.getElementById('kf-x1').textContent = x1.toFixed(1);
+  document.getElementById('kf-k2').textContent = K2.toFixed(4);
+  document.getElementById('kf-x2').textContent = fused.toFixed(1);
+
+  // MQTT JSON
+  const ts = new Date().toISOString().replace('T',' ').split('.')[0]+'Z';
+  document.getElementById('j-dist').textContent   = Math.round(fused*10)/10;
+  document.getElementById('j-spd').textContent    = Math.round(speed*10)/10;
+  document.getElementById('j-safe').textContent   = Math.round(safe*10)/10;
+  document.getElementById('j-s1').textContent     = Math.round(s1*10)/10;
+  document.getElementById('j-s2').textContent     = Math.round(s2*10)/10;
+  document.getElementById('j-alert').textContent  = level;
+  document.getElementById('j-status').textContent = `"${lnames[level]}"`;
+  document.getElementById('j-ts').textContent     = `"${ts}"`;
+
+  // Log
+  msgCount++;
+  const log = document.getElementById('log');
+  const entry = document.createElement('div');
+  entry.className = 'entry ' + ['s','w','d'][level];
+  entry.textContent = `[${String(msgCount).padStart(4,'0')}] ${ts} → dist=${Math.round(fused)}cm spd=${Math.round(speed)}km/h alert=${level}`;
+  log.prepend(entry);
+  while (log.children.length > 25) log.removeChild(log.lastChild);
+
+  // Static vs Dynamic comparison
+  document.getElementById('cmp-spd').textContent  = Math.round(speed);
+  document.getElementById('cmp-dist').textContent = Math.round(trueDist);
+  document.getElementById('dyn-thresh').textContent = Math.round(safe) + ' cm';
+
+  const staticLevel = fused < 150 ? 'DANGER' : 'SAFE';
+  const staticEl = document.getElementById('static-result');
+  staticEl.textContent = staticLevel;
+  staticEl.style.color = staticLevel==='DANGER' ? 'var(--danger)' : 'var(--safe)';
+
+  const warnEl = document.getElementById('static-warn');
+  if (speed > 40 && fused > 150 && level > 0) {
+    warnEl.textContent = '⚠ MISSED ALERT at this speed!';
+  } else if (speed < 15 && fused < 150 && level === 0) {
+    warnEl.textContent = '⚠ FALSE ALARM at this speed!';
+  } else {
+    warnEl.textContent = '';
+  }
+
+  const dynEl = document.getElementById('dynamic-result');
+  dynEl.textContent = lnames[level];
+  dynEl.style.color = lcolors[level];
+  document.getElementById('dynamic-note').textContent = level===0 ? '✓ Correct — physically safe' : level===1 ? '⚠ Correct — approaching limit' : '✓ Correct — real danger detected';
+  document.getElementById('dynamic-note').style.color = lcolors[level];
+
+  // Curve chart — highlight current speed
+  curveChart.data.datasets[1].data = [{x: Math.round(speed), y: safe}];
+  curveChart.update();
+
+  // History chart
+  histDist.push(Math.round(fused*10)/10); histDist.shift();
+  histSafe.push(Math.round(safe*10)/10);  histSafe.shift();
+  histChart.data.datasets[0].data = [...histDist.map((_,i)=>{ return i===histDist.length-1 ? Math.round(s1*10)/10 : histDist[i]; })];
+  histChart.data.datasets[1].data = [...histDist];
+  histChart.data.datasets[2].data = [...histSafe];
+  histChart.update();
+
+  s1Prev=s1; s2Prev=s2;
+}
+
+// ── Slider event listeners ────────────────────────────────────────────
+document.getElementById('speed-slider').addEventListener('input', update);
+document.getElementById('dist-slider').addEventListener('input', update);
+
+// ── Auto-tick every 200ms (adds noise variation) ─────────────────────
+setInterval(() => { update(); }, 200);
+
+// Initial render
+update();
+</script>
+</body>
+</html>

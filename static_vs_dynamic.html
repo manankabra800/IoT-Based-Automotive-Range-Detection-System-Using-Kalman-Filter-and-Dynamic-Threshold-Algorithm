@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Static vs Dynamic Threshold — Animated Comparison</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap');
+
+:root {
+  --bg:     #04080f;
+  --safe:   #00ff9d;
+  --warn:   #ffb700;
+  --danger: #ff2d55;
+  --blue:   #00aaff;
+  --text:   #c8dff0;
+  --dim:    #3a5570;
+  --panel:  #080f1c;
+  --border: #0d1e35;
+}
+
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); font-family:'JetBrains Mono',monospace; color:var(--text); min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:24px 16px; }
+
+h1 { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; color:#fff; text-align:center; margin-bottom:6px; }
+.sub { font-size:10px; color:var(--dim); letter-spacing:2px; text-align:center; margin-bottom:24px; }
+
+.scene { display:grid; grid-template-columns:1fr 1fr; gap:20px; width:100%; max-width:1100px; margin-bottom:20px; }
+
+.side {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:18px;
+  position:relative;
+}
+.side-title {
+  font-size:11px; font-weight:700; letter-spacing:2px;
+  text-align:center; margin-bottom:14px; padding:6px;
+  border-radius:6px;
+}
+.static-title  { background:rgba(255,45,85,0.1);  color:var(--danger); border:1px solid rgba(255,45,85,0.3); }
+.dynamic-title { background:rgba(0,255,157,0.1); color:var(--safe);   border:1px solid rgba(0,255,157,0.3); }
+
+/* Road scene */
+.road {
+  background: linear-gradient(180deg, #0a0e16 0%, #111822 100%);
+  border-radius:8px;
+  height:160px;
+  position:relative;
+  overflow:hidden;
+  margin-bottom:14px;
+  border:1px solid #1a2a40;
+}
+.road-line {
+  position:absolute; top:50%; left:0; right:0;
+  height:2px; background:repeating-linear-gradient(90deg,#ffd10044 0px,#ffd10044 30px,transparent 30px,transparent 60px);
+  transform:translateY(-50%);
+}
+/* Vehicle */
+.vehicle {
+  position:absolute;
+  top:50%; transform:translateY(-50%);
+  width:54px; height:28px;
+  transition: left 0.3s ease;
+}
+.car-body {
+  width:54px; height:20px; background:#1a6abf; border-radius:4px;
+  position:absolute; bottom:0;
+  box-shadow:0 0 10px rgba(26,106,191,0.6);
+}
+.car-top {
+  width:34px; height:14px; background:#1a6abf; border-radius:4px 4px 0 0;
+  position:absolute; bottom:18px; left:10px;
+}
+.car-light {
+  width:6px; height:6px; border-radius:50%;
+  position:absolute; right:2px; bottom:6px;
+  background:#fff; box-shadow:0 0 8px #fff;
+}
+.car-wheel {
+  width:8px; height:8px; border-radius:50%; background:#333;
+  border:2px solid #666; position:absolute; bottom:-3px;
+}
+.wheel-l { left:8px; }
+.wheel-r { right:8px; }
+
+/* Obstacle */
+.obstacle {
+  position:absolute; top:50%; right:20px;
+  transform:translateY(-50%);
+  width:30px; height:50px;
+  background:linear-gradient(180deg,#cc3300,#441100);
+  border-radius:4px;
+  box-shadow:0 0 12px rgba(204,51,0,0.5);
+}
+.obstacle::after {
+  content:''; position:absolute; top:-8px; left:50%; transform:translateX(-50%);
+  width:6px; height:6px; border-radius:50%;
+  background:#ff4400; box-shadow:0 0 8px #ff4400;
+}
+
+/* Threshold line */
+.threshold-line {
+  position:absolute; top:0; bottom:0;
+  width:2px;
+  transition: right 0.3s ease;
+}
+.threshold-label {
+  position:absolute; top:6px;
+  font-size:8px; font-weight:700;
+  white-space:nowrap; padding:2px 5px;
+  border-radius:3px;
+}
+
+/* Distance beam */
+.beam {
+  position:absolute; top:50%; height:2px;
+  background:linear-gradient(90deg, transparent, var(--blue), transparent);
+  transform:translateY(-50%);
+  transition: all 0.3s;
+  opacity:0.6;
+}
+.beam-label {
+  position:absolute; top:50%; transform:translateY(-120%);
+  font-size:9px; color:var(--blue); white-space:nowrap;
+  text-align:center;
+}
+
+/* Alert indicator */
+.alert-box {
+  border-radius:8px; padding:10px 14px;
+  text-align:center; font-size:12px; font-weight:700; letter-spacing:2px;
+  margin-bottom:10px; transition: all 0.3s;
+}
+.alert-safe    { background:rgba(0,255,157,0.1);  color:var(--safe);   border:1px solid rgba(0,255,157,0.3); }
+.alert-warning { background:rgba(255,183,0,0.12); color:var(--warn);   border:1px solid rgba(255,183,0,0.4); animation:blink 1s infinite; }
+.alert-danger  { background:rgba(255,45,85,0.15); color:var(--danger); border:1px solid rgba(255,45,85,0.5); animation:blink 0.35s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* Stats row */
+.stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.stat-box { background:rgba(0,0,0,0.3); border-radius:6px; padding:8px; text-align:center; }
+.stat-val { font-size:18px; font-weight:700; }
+.stat-lbl { font-size:8px; color:var(--dim); letter-spacing:1px; margin-top:2px; }
+
+/* Controls */
+.controls {
+  display:flex; flex-direction:column; align-items:center;
+  gap:14px; width:100%; max-width:1100px; margin-bottom:16px;
+}
+.ctrl-row { display:flex; align-items:center; gap:16px; width:100%; }
+.ctrl-label { font-size:10px; color:var(--dim); width:160px; text-align:right; }
+input[type=range] {
+  flex:1; height:5px; border-radius:3px; outline:none; cursor:pointer;
+  -webkit-appearance:none; background:var(--border);
+}
+input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:#fff; cursor:pointer; }
+.ctrl-val { font-size:13px; font-weight:700; color:var(--blue); width:80px; }
+
+/* Scenario buttons */
+.scenarios { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:16px; }
+.scn-btn {
+  font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700;
+  padding:7px 14px; border-radius:6px; border:1px solid;
+  cursor:pointer; letter-spacing:1px; background:transparent; transition:all 0.2s;
+}
+.scn-btn:hover { opacity:0.8; transform:scale(1.02); }
+.scn-1 { border-color:var(--safe);   color:var(--safe);   }
+.scn-2 { border-color:var(--danger); color:var(--danger); }
+.scn-3 { border-color:var(--warn);   color:var(--warn);   }
+.scn-4 { border-color:var(--blue);   color:var(--blue);   }
+
+/* Problem tag */
+.problem-tag {
+  font-size:9px; padding:3px 8px; border-radius:4px; margin-top:6px;
+  display:inline-block; font-weight:700; letter-spacing:1px;
+}
+
+footer { font-size:9px; color:var(--dim); text-align:center; margin-top:8px; letter-spacing:1px; }
+</style>
+</head>
+<body>
+
+<h1>Static vs Dynamic Threshold — Side by Side</h1>
+<div class="sub">DRAG SLIDERS OR CLICK SCENARIOS TO SEE WHY DYNAMIC ALWAYS WINS</div>
+
+<!-- Scenarios -->
+<div class="scenarios">
+  <button class="scn-btn scn-1" onclick="setScenario(30,200)">🐢 Low Speed (30 km/h)</button>
+  <button class="scn-btn scn-2" onclick="setScenario(80,300)">🚨 High Speed Danger (80 km/h)</button>
+  <button class="scn-btn scn-3" onclick="setScenario(60,200)">⚠ Medium Speed (60 km/h)</button>
+  <button class="scn-btn scn-4" onclick="setScenario(0,100)">🅿 Standstill (0 km/h)</button>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="ctrl-row">
+    <span class="ctrl-label">🚗 Speed (km/h)</span>
+    <input type="range" id="s-speed" min="0" max="120" value="30" step="1" oninput="render()">
+    <span class="ctrl-val" id="v-speed">30 km/h</span>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-label">📏 Distance (cm)</span>
+    <input type="range" id="s-dist" min="20" max="600" value="200" step="1" oninput="render()">
+    <span class="ctrl-val" id="v-dist">200 cm</span>
+  </div>
+</div>
+
+<!-- Scene -->
+<div class="scene">
+
+  <!-- LEFT: Static -->
+  <div class="side">
+    <div class="side-title static-title">❌  STATIC THRESHOLD  —  150 cm FIXED  (Existing Systems)</div>
+    <div class="alert-box alert-safe" id="static-alert">● SAFE</div>
+    <div class="road" id="static-road">
+      <div class="road-line"></div>
+      <div class="vehicle" id="static-car">
+        <div class="car-top"></div>
+        <div class="car-body"><div class="car-light"></div></div>
+        <div class="car-wheel wheel-l"></div>
+        <div class="car-wheel wheel-r"></div>
+      </div>
+      <div class="obstacle"></div>
+      <div class="threshold-line" id="static-line" style="background:rgba(255,45,85,0.8);border-right:2px dashed var(--danger)">
+        <div class="threshold-label" style="background:var(--danger);color:#fff;right:4px">150 cm fixed</div>
+      </div>
+      <div class="beam" id="static-beam"></div>
+      <div class="beam-label" id="static-beam-label"></div>
+    </div>
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--danger)">150 cm</div>
+        <div class="stat-lbl">FIXED THRESHOLD</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="static-dist-val" style="color:var(--blue)">---</div>
+        <div class="stat-lbl">CURRENT DIST</div>
+      </div>
+    </div>
+    <div id="static-problem" style="text-align:center;margin-top:8px;min-height:24px"></div>
+  </div>
+
+  <!-- RIGHT: Dynamic -->
+  <div class="side">
+    <div class="side-title dynamic-title">✅  DYNAMIC THRESHOLD  —  GPS-ADAPTIVE  (Our System)</div>
+    <div class="alert-box alert-safe" id="dynamic-alert">● SAFE</div>
+    <div class="road" id="dynamic-road">
+      <div class="road-line"></div>
+      <div class="vehicle" id="dynamic-car">
+        <div class="car-top"></div>
+        <div class="car-body"><div class="car-light"></div></div>
+        <div class="car-wheel wheel-l"></div>
+        <div class="car-wheel wheel-r"></div>
+      </div>
+      <div class="obstacle"></div>
+      <div class="threshold-line" id="dynamic-line" style="background:rgba(0,255,157,0.8);border-right:2px dashed var(--safe)">
+        <div class="threshold-label" id="dynamic-thresh-label" style="background:var(--safe);color:#000;right:4px">--- cm</div>
+      </div>
+      <div class="beam" id="dynamic-beam"></div>
+      <div class="beam-label" id="dynamic-beam-label"></div>
+    </div>
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-val" id="dynamic-thresh-val" style="color:var(--safe)">---</div>
+        <div class="stat-lbl">DYNAMIC THRESHOLD</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="dynamic-dist-val" style="color:var(--blue)">---</div>
+        <div class="stat-lbl">CURRENT DIST</div>
+      </div>
+    </div>
+    <div id="dynamic-note" style="text-align:center;margin-top:8px;min-height:24px"></div>
+  </div>
+
+</div>
+
+<footer>Ajinkya Bhagwat · Manan Kabra · Rishita Modi  |  NMIT Bengaluru · VTU · 2026-27  |  IS 11556 — d_safe = v·tᵣ + v²/(2a)</footer>
+
+<script>
+const ROAD_W   = 560;  // logical road width
+const OBS_R    = 20;   // obstacle right offset px
+const CAR_W    = 54;
+const STATIC_T = 150;
+
+function safeDistance(spd) {
+  const v = spd / 3.6;
+  return Math.max(20, (v * 0.7 + v * v / 14.0) * 100);
+}
+
+function setScenario(spd, dist) {
+  document.getElementById('s-speed').value = spd;
+  document.getElementById('s-dist').value  = dist;
+  render();
+}
+
+function getAlertLevel(dist, threshold) {
+  if      (dist < threshold * 0.5) return 2;
+  else if (dist < threshold)       return 1;
+  return 0;
+}
+
+function updateRoad(prefix, dist, threshold, speed) {
+  const roadEl   = document.getElementById(prefix+'-road');
+  const roadPx   = roadEl.offsetWidth || 460;
+  const maxDist  = 600;
+
+  // Car position: 0 dist = car right at edge, 600 = car far left
+  const carRightPx  = OBS_R + 30; // obstacle right edge px from right
+  const carMaxLeft  = roadPx - CAR_W - 20;
+  const carLeft     = carMaxLeft - (dist / maxDist) * (carMaxLeft - 10);
+  document.getElementById(prefix+'-car').style.left = Math.max(5, Math.min(carMaxLeft, carLeft)) + 'px';
+
+  // Threshold line from right
+  const threshPx = Math.min(roadPx * 0.85, (threshold / maxDist) * roadPx);
+  const lineRight = carRightPx + threshPx;
+  const tLine = document.getElementById(prefix+'-line');
+  tLine.style.right = lineRight + 'px';
+  tLine.style.left  = 'auto';
+  tLine.style.width = '2px';
+
+  if (prefix === 'dynamic') {
+    document.getElementById('dynamic-thresh-label').textContent = Math.round(threshold) + ' cm';
+  }
+
+  // Beam between car and obstacle
+  const obsLeftPx  = roadPx - OBS_R - 30;
+  const carRightPos = Math.max(5, Math.min(carMaxLeft, carLeft)) + CAR_W;
+  const beamW = obsLeftPx - carRightPos;
+  const beam  = document.getElementById(prefix+'-beam');
+  beam.style.left  = carRightPos + 'px';
+  beam.style.width = Math.max(0, beamW) + 'px';
+
+  const beamLabel = document.getElementById(prefix+'-beam-label');
+  beamLabel.style.left  = (carRightPos + beamW/2 - 20) + 'px';
+  beamLabel.textContent = Math.round(dist) + ' cm';
+}
+
+function render() {
+  const speed = parseFloat(document.getElementById('s-speed').value);
+  const dist  = parseFloat(document.getElementById('s-dist').value);
+  const dynT  = safeDistance(speed);
+
+  document.getElementById('v-speed').textContent = Math.round(speed) + ' km/h';
+  document.getElementById('v-dist').textContent  = Math.round(dist)  + ' cm';
+
+  // Static system
+  const staticLevel = getAlertLevel(dist, STATIC_T);
+  const dynamicLevel = getAlertLevel(dist, dynT);
+
+  const alertCls   = ['alert-safe','alert-warning','alert-danger'];
+  const alertText  = ['● SAFE','⚠ WARNING','🚨 DANGER'];
+
+  // Update alerts
+  const sAlert = document.getElementById('static-alert');
+  sAlert.className  = 'alert-box ' + alertCls[staticLevel];
+  sAlert.textContent = alertText[staticLevel];
+
+  const dAlert = document.getElementById('dynamic-alert');
+  dAlert.className  = 'alert-box ' + alertCls[dynamicLevel];
+  dAlert.textContent = alertText[dynamicLevel];
+
+  // Update stats
+  document.getElementById('static-dist-val').textContent  = Math.round(dist) + ' cm';
+  document.getElementById('dynamic-dist-val').textContent = Math.round(dist) + ' cm';
+  document.getElementById('dynamic-thresh-val').textContent = Math.round(dynT) + ' cm';
+
+  // Problem / note tags
+  const probEl = document.getElementById('static-problem');
+  const noteEl = document.getElementById('dynamic-note');
+
+  probEl.innerHTML = '';
+  noteEl.innerHTML = '';
+
+  // Detect missed alert (dynamic says danger/warn but static says safe)
+  if (dynamicLevel > 0 && staticLevel === 0) {
+    probEl.innerHTML = '<span class="problem-tag" style="background:rgba(255,45,85,0.2);color:var(--danger);border:1px solid var(--danger)">⚠ MISSED ALERT — Vehicle needs ' + Math.round(dynT) + ' cm to stop!</span>';
+    noteEl.innerHTML = '<span class="problem-tag" style="background:rgba(0,255,157,0.15);color:var(--safe);border:1px solid var(--safe)">✓ CORRECT — Alert fired in time</span>';
+  }
+  // Detect false alarm (static says danger but dynamic says safe)
+  else if (staticLevel > 0 && dynamicLevel === 0) {
+    probEl.innerHTML = '<span class="problem-tag" style="background:rgba(255,45,85,0.2);color:var(--warn);border:1px solid var(--warn)">⚠ FALSE ALARM — Only ' + Math.round(dynT) + ' cm needed at this speed</span>';
+    noteEl.innerHTML = '<span class="problem-tag" style="background:rgba(0,255,157,0.15);color:var(--safe);border:1px solid var(--safe)">✓ NO FALSE ALARM — Threshold correct</span>';
+  }
+  // Both agree
+  else if (staticLevel === dynamicLevel) {
+    noteEl.innerHTML = '<span class="problem-tag" style="background:rgba(0,170,255,0.1);color:var(--blue);border:1px solid var(--blue)">Both systems agree at this speed/distance</span>';
+  }
+
+  updateRoad('static',  dist, STATIC_T, speed);
+  updateRoad('dynamic', dist, dynT,     speed);
+}
+
+// Initial render
+render();
+window.addEventListener('resize', render);
+</script>
+</body>
+</html>
